@@ -1055,6 +1055,9 @@ namespace UnityEngine.Rendering.HighDefinition
 #endif
             m_GlobalSettings.GetOrCreateDefaultVolume();
 
+
+            DecalSystem.instance.StartDecalUpdateJobs();
+
             // This function should be called once every render (once for all camera)
             LightLoopNewRender();
 

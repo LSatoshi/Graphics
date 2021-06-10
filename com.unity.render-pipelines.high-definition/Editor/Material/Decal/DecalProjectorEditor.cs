@@ -57,7 +57,7 @@ namespace UnityEditor.Rendering.HighDefinition
         SerializedProperty m_FadeFactor;
         SerializedProperty m_DecalLayerMask;
 
-        int layerMask => (target as Component).gameObject.layer;
+        int layerMask => (target as DecalProjector).cachedEditorLayer;
         bool layerMaskHasMultipleValue
         {
             get
@@ -341,7 +341,7 @@ namespace UnityEditor.Rendering.HighDefinition
                     }
 
                     // Smoothly update the decal image projected
-                    DecalSystem.instance.UpdateCachedData(decalProjector.Handle, decalProjector.GetCachedDecalData());
+                    DecalSystem.instance.UpdateCachedData(decalProjector.Handle, decalProjector);
                 }
             }
         }
