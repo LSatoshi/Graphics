@@ -249,7 +249,7 @@ void TEMPORAL_FILTER(uint3 dispatchThreadId : SV_DispatchThreadID
         invalidHistory = true;
 
     // Fetch history data
-    float3 history0 = SAMPLE_TEXTURE2D_X_LOD(_HistoryBuffer0, s_linear_clamp_sampler, historyTapCoord * _ScreenSize.zw * _RTHandleScaleHistory.zw, 0).xyz* GetInversePreviousExposureMultiplier() * GetCurrentExposureMultiplier();
+    float3 history0 = SAMPLE_TEXTURE2D_X_LOD(_HistoryBuffer0, s_linear_clamp_sampler, historyTapCoord * _ScreenSize.zw * _RTHandleScaleHistory.zw, 0).xyz * GetInversePreviousExposureMultiplier() * GetCurrentExposureMultiplier();
     float2 history1 = SAMPLE_TEXTURE2D_X_LOD(_HistoryBuffer1, s_linear_clamp_sampler, historyTapCoord * _ScreenSize.zw * _RTHandleScaleHistory.zw, 0).xy;
     float sampleCount = history1.y;
 
