@@ -33,10 +33,12 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fixed a large, visible stretch ratio in a LensFlare Image thumbnail.
 - Fixed Undo from script refreshing thumbnail.
 - Fixed cropped thumbnail for Image with non-uniform scale and rotation
+- Fixed errors on Adding Overrides to the Volume Profile. Only show Volume Components from the current Pipeline
 
 ### Added
 - Support for the PlayStation 5 platform has been added.
 - Support for additional properties for Volume Components without custom editor
+- Exposing new attribute SupportedOn
 - Calculating correct rtHandleScale by considering the possible pixel rounding when DRS is on
 - Support for the PlayStation 5 platform has been added.
 - Support for the XboxSeries platform has been added.
