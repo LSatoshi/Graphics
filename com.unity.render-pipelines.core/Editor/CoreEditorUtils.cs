@@ -106,7 +106,7 @@ namespace UnityEditor.Rendering
             using (new EditorGUILayout.HorizontalScope(EditorStyles.helpBox))
             {
                 EditorGUILayout.LabelField(message, CoreEditorStyles.helpBoxLabelStyle);
-                GUILayout.Space(CoreEditorConstants.standardHorizontalSpacing);
+                GUILayout.FlexibleSpace();
                 using (new EditorGUILayout.VerticalScope())
                 {
                     GUILayout.FlexibleSpace();
@@ -114,7 +114,7 @@ namespace UnityEditor.Rendering
                     if (GUILayout.Button("Fix", GUILayout.Width(60)))
                         action();
 
-                    GUILayout.Space(8);
+                    GUILayout.FlexibleSpace();
                 }
             }
             GUILayout.Space(11);
