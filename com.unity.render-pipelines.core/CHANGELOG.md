@@ -15,6 +15,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - LensFlare (SRP) tooltips now refer to meters.
 - Serialize the Probe Volume asset as binary to improve footprint on disk and loading speed.
 - LensFlare Element editor now have Thumbnail preview
+- Improved the warning messages for Volumes and their Colliders.
 
 ### Fixed
 - Fixed missing warning UI about Projector component being unsupported (case 1300327).
@@ -34,6 +35,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - Fixed Undo from script refreshing thumbnail.
 - Fixed cropped thumbnail for Image with non-uniform scale and rotation
 - Skip wind calculations for Speed Tree 8 when wind vector is zero (case 1343002)
+- Help boxes with fix buttons do not crop the label.
 
 ### Added
 - Support for the PlayStation 5 platform has been added.
@@ -45,6 +47,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/spec/v2.0.0.
 - New method DrawHeaders for VolumeComponentsEditors
 - Unification of Material Editor Headers Scopes
 - New API functions with no side effects in DynamicResolutionHandler, to retrieve resolved drs scale and to apply DRS on a size.
+- Added helper for Volumes (Enable All Overrides, Disable All Overrides, Remove All Overrides).
 - Added a blitter utility class. Moved from HDRP to RP core.
 - Added a realtime 2D texture atlas utility classes. Moved from HDRP to RP core.
 - New methods on CoreEditorDrawers, to allow adding a label on a group before rendering the internal drawers

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor.PackageManager;
 using UnityEngine;
@@ -9,6 +10,33 @@ namespace UnityEditor.Rendering
     [CustomEditor(typeof(Volume))]
     sealed class VolumeEditor : Editor
     {
+        static class Styles
+        {
+            public static readonly GUIContent mode = EditorGUIUtility.TrTextContent("Mode", "A global volume is applied to the whole scene.");
+            public static readonly GUIContent[] modes =
+                {
+                    EditorGUIUtility.TrTextContent("Global"),
+                    EditorGUIUtility.TrTextContent("Local")
+                };
+
+            public static readonly GUIContent addBoxCollider = EditorGUIUtility.TrTextContent("Add a Box Collider");
+            public static readonly GUIContent sphereBoxCollider = EditorGUIUtility.TrTextContent("Add a Sphere Collider");
+            public static readonly GUIContent capsuleBoxCollider = EditorGUIUtility.TrTextContent("Add a Capsule Collider");
+            public static readonly GUIContent meshBoxCollider = EditorGUIUtility.TrTextContent("Add a Mesh Collider");
+
+            public static readonly GUIContent addColliderFixMessage = EditorGUIUtility.TrTextContentWithIcon("Add a Collider to this GameObject to set boundaries for the local Volume.", CoreEditorStyles.iconWarn);
+            public static readonly GUIContent disableColliderFixMessage = EditorGUIUtility.TrTextContentWithIcon("Global Volumes do not need a collider. Disable or remove the collider.", CoreEditorStyles.iconWarn);
+            public static readonly GUIContent enableColliderFixMessage = EditorGUIUtility.TrTextContentWithIcon("Local Volumes need a collider enabled. Enable the collider.", CoreEditorStyles.iconWarn);
+
+            public static readonly GUIContent profileInstance = EditorGUIUtility.TrTextContent("Profile (Instance)", "A copy of a profile asset.");
+            public static readonly GUIContent profile = EditorGUIUtility.TrTextContent("Profile", "A reference to a profile asset.");
+
+            public static readonly GUIContent newLabel = EditorGUIUtility.TrTextContent("New", "Create a new profile.");
+            public static readonly GUIContent saveLabel = EditorGUIUtility.TrTextContent("Save", "Save the instantiated profile");
+            public static readonly GUIContent cloneLabel = EditorGUIUtility.TrTextContent("Clone", "Create a new profile and copy the content of the currently assigned profile.");
+        }
+
+        Tool m_PreviousTool;
         SerializedProperty m_IsGlobal;
         SerializedProperty m_BlendRadius;
         SerializedProperty m_Weight;
@@ -21,8 +49,6 @@ namespace UnityEditor.Rendering
 
         VolumeProfile profileRef => actualTarget.HasInstantiatedProfile() ? actualTarget.profile : actualTarget.sharedProfile;
 
-        readonly GUIContent[] m_Modes = { new GUIContent("Global"), new GUIContent("Local") };
-
         void OnEnable()
         {
             var o = new PropertyFetcher<Volume>(serializedObject);
@@ -34,11 +60,14 @@ namespace UnityEditor.Rendering
 
             m_ComponentList = new VolumeComponentListEditor(this);
             RefreshEffectListEditor(actualTarget.sharedProfile);
+
+            m_PreviousTool = Tools.current;
         }
 
         void OnDisable()
         {
             m_ComponentList?.Clear();
+            Tools.current = m_PreviousTool;
         }
 
         void RefreshEffectListEditor(VolumeProfile asset)
@@ -49,41 +78,99 @@ namespace UnityEditor.Rendering
                 m_ComponentList.Init(asset, new SerializedObject(asset));
         }
 
+        private void AddOverride()
+        {
+            var menu = new GenericMenu();
+            menu.AddItem(Styles.addBoxCollider, false, () => Undo.AddComponent<BoxCollider>(actualTarget.gameObject));
+            menu.AddItem(Styles.sphereBoxCollider, false, () => Undo.AddComponent<SphereCollider>(actualTarget.gameObject));
+            menu.AddItem(Styles.capsuleBoxCollider, false, () => Undo.AddComponent<CapsuleCollider>(actualTarget.gameObject));
+            menu.AddItem(Styles.meshBoxCollider, false, () => Undo.AddComponent<MeshCollider>(actualTarget.gameObject));
+            menu.ShowAsContext();
+        }
+
+        [MenuItem("CONTEXT/Volume/Remove All Overrides")]
+        private static void RemoveAllOverrides(MenuCommand command)
+        {
+            if (command.context is Volume volumeComponent)
+            {
+                volumeComponent.profile.components.Clear();
+            }
+        }
+
+        private static void SetVolumeOverridesActiveState(List<VolumeComponent> components, bool activeState)
+        {
+            foreach (var v in components)
+            {
+                v.active = activeState;
+            }
+        }
+
+        [MenuItem("CONTEXT/Volume/Disable All Overrides")]
+        private static void DisableAllOverrides(MenuCommand command)
+        {
+            if (command.context is Volume volumeComponent)
+                SetVolumeOverridesActiveState(volumeComponent.profile.components, false);
+        }
+
+        [MenuItem("CONTEXT/Volume/Enable All Overrides")]
+        private static void EnableAllOverrides(MenuCommand command)
+        {
+            if (command.context is Volume volumeComponent)
+                SetVolumeOverridesActiveState(volumeComponent.profile.components, true);
+        }
+
         public override void OnInspectorGUI()
         {
             serializedObject.Update();
-
-            GUIContent label = EditorGUIUtility.TrTextContent("Mode", "A global volume is applied to the whole scene.");
+            
             Rect lineRect = EditorGUILayout.GetControlRect();
             int isGlobal = m_IsGlobal.boolValue ? 0 : 1;
-            EditorGUI.BeginProperty(lineRect, label, m_IsGlobal);
+            using (new EditorGUI.PropertyScope(lineRect, Styles.mode, m_IsGlobal))
+            using (var scope = new EditorGUI.ChangeCheckScope())
             {
-                EditorGUI.BeginChangeCheck();
-                isGlobal = EditorGUI.Popup(lineRect, label, isGlobal, m_Modes);
-                if (EditorGUI.EndChangeCheck())
-                    m_IsGlobal.boolValue = isGlobal == 0;
+                isGlobal = EditorGUI.Popup(lineRect, Styles.mode, isGlobal, Styles.modes);
+                if (scope.changed)
+                {
+                    if (isGlobal == 0)
+                    {
+                        // Store the used tool to restore the value
+                        m_PreviousTool = Tools.current;
+                        m_IsGlobal.boolValue = true;
+                    }
+                    else
+                    {
+                        // Restore the used tool
+                        Tools.current = m_PreviousTool;
+                        m_IsGlobal.boolValue = false;
+                    }
+                }
             }
-            EditorGUI.EndProperty();
-
+            
             if (isGlobal != 0) // Blend radius is not needed for global volumes
             {
-                if (!actualTarget.TryGetComponent<Collider>(out _))
+                if (actualTarget.TryGetComponent<Collider>(out var collider))
                 {
-                    EditorGUILayout.HelpBox("Add a Collider to this GameObject to set boundaries for the local Volume.", MessageType.Info);
-
-                    if (GUILayout.Button(EditorGUIUtility.TrTextContent("Add Collider"), EditorStyles.miniButton))
-                    {
-                        var menu = new GenericMenu();
-                        menu.AddItem(EditorGUIUtility.TrTextContent("Box"), false, () => Undo.AddComponent<BoxCollider>(actualTarget.gameObject));
-                        menu.AddItem(EditorGUIUtility.TrTextContent("Sphere"), false, () => Undo.AddComponent<SphereCollider>(actualTarget.gameObject));
-                        menu.AddItem(EditorGUIUtility.TrTextContent("Capsule"), false, () => Undo.AddComponent<CapsuleCollider>(actualTarget.gameObject));
-                        menu.AddItem(EditorGUIUtility.TrTextContent("Mesh"), false, () => Undo.AddComponent<MeshCollider>(actualTarget.gameObject));
-                        menu.ShowAsContext();
-                    }
+                    if (!collider.enabled)
+                        CoreEditorUtils.DrawFixMeBox(Styles.enableColliderFixMessage, () => collider.enabled = true);
+                }
+                else
+                {
+                    CoreEditorUtils.DrawFixMeBox(Styles.addColliderFixMessage, AddOverride);
                 }
 
                 EditorGUILayout.PropertyField(m_BlendRadius);
                 m_BlendRadius.floatValue = Mathf.Max(m_BlendRadius.floatValue, 0f);
+            }
+            else
+            {
+                // When the volume is global hide all the transform gizmos
+                Tools.current = Tool.None;
+
+                if (actualTarget.TryGetComponent<Collider>(out var collider))
+                {
+                    if (collider.enabled)
+                        CoreEditorUtils.DrawFixMeBox(Styles.disableColliderFixMessage, () => collider.enabled = false);
+                }
             }
 
             EditorGUILayout.PropertyField(m_Weight);
@@ -103,39 +190,32 @@ namespace UnityEditor.Rendering
             var buttonNewRect = new Rect(fieldRect.xMax, lineRect.y, buttonWidth, lineRect.height);
             var buttonCopyRect = new Rect(buttonNewRect.xMax, lineRect.y, buttonWidth, lineRect.height);
 
-            GUIContent guiContent;
-            if (actualTarget.HasInstantiatedProfile())
-                guiContent = EditorGUIUtility.TrTextContent("Profile (Instance)", "A copy of a profile asset.");
-            else
-                guiContent = EditorGUIUtility.TrTextContent("Profile", "A reference to a profile asset.");
+            GUIContent guiContent = actualTarget.HasInstantiatedProfile() ? Styles.profileInstance : Styles.profile;
+
             EditorGUI.PrefixLabel(labelRect, guiContent);
 
+            using (new EditorGUI.PropertyScope(fieldRect, GUIContent.none, m_Profile))
             using (var scope = new EditorGUI.ChangeCheckScope())
             {
-                EditorGUI.BeginProperty(fieldRect, GUIContent.none, m_Profile);
+                var profile = actualTarget.HasInstantiatedProfile()
+                    ? actualTarget.profile
+                    : m_Profile.objectReferenceValue;
 
-                VolumeProfile profile;
-
-                if (actualTarget.HasInstantiatedProfile())
-                    profile = (VolumeProfile)EditorGUI.ObjectField(fieldRect, actualTarget.profile, typeof(VolumeProfile), false);
-                else
-                    profile = (VolumeProfile)EditorGUI.ObjectField(fieldRect, m_Profile.objectReferenceValue, typeof(VolumeProfile), false);
-
+                VolumeProfile editedProfile =
+                    (VolumeProfile) EditorGUI.ObjectField(fieldRect, profile, typeof(VolumeProfile), false);
                 if (scope.changed)
                 {
                     assetHasChanged = true;
-                    m_Profile.objectReferenceValue = profile;
+                    m_Profile.objectReferenceValue = editedProfile;
 
                     if (actualTarget.HasInstantiatedProfile()) // Clear the instantiated profile, from now on we're using shared again
                         actualTarget.profile = null;
                 }
-
-                EditorGUI.EndProperty();
             }
 
             using (new EditorGUI.DisabledScope(multiEdit))
             {
-                if (GUI.Button(buttonNewRect, EditorGUIUtility.TrTextContent("New", "Create a new profile."), showCopy ? EditorStyles.miniButtonLeft : EditorStyles.miniButton))
+                if (GUI.Button(buttonNewRect, Styles.newLabel, showCopy ? EditorStyles.miniButtonLeft : EditorStyles.miniButton))
                 {
                     // By default, try to put assets in a folder next to the currently active
                     // scene file. If the user isn't a scene, put them in root instead.
@@ -147,10 +227,7 @@ namespace UnityEditor.Rendering
                     assetHasChanged = true;
                 }
 
-                if (actualTarget.HasInstantiatedProfile())
-                    guiContent = EditorGUIUtility.TrTextContent("Save", "Save the instantiated profile");
-                else
-                    guiContent = EditorGUIUtility.TrTextContent("Clone", "Create a new profile and copy the content of the currently assigned profile.");
+                guiContent = actualTarget.HasInstantiatedProfile() ? Styles.saveLabel : Styles.cloneLabel;
                 if (showCopy && GUI.Button(buttonCopyRect, guiContent, EditorStyles.miniButtonRight))
                 {
                     // Duplicate the currently assigned profile and save it as a new profile
