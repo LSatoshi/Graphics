@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using JetBrains.Annotations;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Assertions;
 #if UNITY_EDITOR
 using UnityEditor;
 #endif
@@ -118,6 +119,9 @@ namespace UnityEngine.Rendering.HighDefinition
         internal static HashSet<HDAdditionalLightData> s_overlappingHDLights = new HashSet<HDAdditionalLightData>();
 
         #region HDLight Properties API
+
+        [ExcludeCopy]
+        internal HDLightEntity lightEntity = HDLightEntity.Invalid;
 
         [SerializeField, FormerlySerializedAs("displayLightIntensity")]
         float m_Intensity;
@@ -1895,6 +1899,12 @@ namespace UnityEngine.Rendering.HighDefinition
 
             SetEmissiveMeshRendererEnabled(false);
             s_overlappingHDLights.Remove(this);
+
+            if (lightEntity.valid)
+            {
+                HDLightEntityCollection.instance.DestroyEntity(lightEntity);
+                lightEntity = HDLightEntity.Invalid;
+            }
         }
 
         void SetEmissiveMeshRendererEnabled(bool enabled)
@@ -3497,6 +3507,9 @@ namespace UnityEngine.Rendering.HighDefinition
             }
 
             SetEmissiveMeshRendererEnabled(true);
+
+            Assert.IsFalse(lightEntity.valid);
+            lightEntity = HDLightEntityCollection.instance.CreateEntity(legacyLight);
         }
 
         /// <summary>
