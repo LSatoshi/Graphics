@@ -1088,6 +1088,9 @@ namespace UnityEngine.Rendering.HighDefinition
                 HDCamera.CleanUnused();
             }
 
+
+            HDLightEntityCollection.instance.Test();
+
 #if ENABLE_NVIDIA && ENABLE_NVIDIA_MODULE
             m_DebugDisplaySettings.nvidiaDebugView.Update();
 #endif
