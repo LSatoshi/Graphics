@@ -1,25 +1,20 @@
 using System;
-using UnityEngine.Scripting.APIUpdating;
+using System.Collections;
+using System.Collections.Generic;
+using UnityEngine;
+using UnityEditor;
 
-namespace UnityEngine.Rendering.Universal
+namespace UnityEngine.Experimental.Rendering.Universal
 {
+
     /// <summary>
     /// Class <c>ShadowCaster2D</c> contains properties used for shadow casting
     /// </summary>
     [ExecuteInEditMode]
     [DisallowMultipleComponent]
-    [AddComponentMenu("Rendering/2D/Shadow Caster 2D")]
-    [MovedFrom("UnityEngine.Experimental.Rendering.Universal")]
-    public class ShadowCaster2D : ShadowCasterGroup2D, ISerializationCallbackReceiver
+    [AddComponentMenu("Rendering/2D/Shadow Caster 2D (Experimental)")]
+    public class ShadowCaster2D : ShadowCasterGroup2D
     {
-        public enum ComponentVersions
-        {
-            Version_Unserialized = 0,
-            Version_1 = 1
-        }
-        const ComponentVersions k_CurrentComponentVersion = ComponentVersions.Version_1;
-        [SerializeField] ComponentVersions m_ComponentVersion = ComponentVersions.Version_Unserialized;
-
         [SerializeField] bool m_HasRenderer = false;
         [SerializeField] bool m_UseRendererSilhouette = true;
         [SerializeField] bool m_CastsShadows = true;
@@ -33,16 +28,14 @@ namespace UnityEngine.Rendering.Universal
         internal ShadowCasterGroup2D m_ShadowCasterGroup = null;
         internal ShadowCasterGroup2D m_PreviousShadowCasterGroup = null;
 
-        [SerializeField]
-        internal BoundingSphere m_ProjectedBoundingSphere;
-
-        public Mesh mesh => m_Mesh;
-        public Vector3[] shapePath => m_ShapePath;
+        internal Mesh mesh => m_Mesh;
+        internal Vector3[] shapePath => m_ShapePath;
         internal int shapePathHash { get { return m_ShapePathHash; } set { m_ShapePathHash = value; } }
 
         int m_PreviousShadowGroup = 0;
         bool m_PreviousCastsShadows = true;
         int m_PreviousPathHash = 0;
+
 
         /// <summary>
         /// If selfShadows is true, useRendererSilhoutte specifies that the renderer's sihouette should be considered part of the shadow. If selfShadows is false, useRendererSilhoutte specifies that the renderer's sihouette should be excluded from the shadow
@@ -76,7 +69,7 @@ namespace UnityEngine.Rendering.Universal
             int layerCount = SortingLayer.layers.Length;
             int[] allLayers = new int[layerCount];
 
-            for (int layerIndex = 0; layerIndex < layerCount; layerIndex++)
+            for(int layerIndex=0;layerIndex < layerCount;layerIndex++)
             {
                 allLayers[layerIndex] = SortingLayer.layers[layerIndex].id;
             }
@@ -84,58 +77,63 @@ namespace UnityEngine.Rendering.Universal
             return allLayers;
         }
 
-        internal bool IsLit(Light2D light)
-        {
-            Vector3 deltaPos = light.transform.position - (m_ProjectedBoundingSphere.position + transform.position);
-            float distanceSq = Vector3.SqrMagnitude(deltaPos);
-
-            float radiiLength = light.boundingSphere.radius + m_ProjectedBoundingSphere.radius;
-            return distanceSq <= (radiiLength * radiiLength);
-        }
-
         internal bool IsShadowedLayer(int layer)
         {
             return m_ApplyToSortingLayers != null ? Array.IndexOf(m_ApplyToSortingLayers, layer) >= 0 : false;
         }
 
-        private void Awake()
-        {
-            if (m_ApplyToSortingLayers == null)
+        private void Awake() {
+            if(m_ApplyToSortingLayers == null)
                 m_ApplyToSortingLayers = SetDefaultSortingLayers();
-
+    
             Bounds bounds = new Bounds(transform.position, Vector3.one);
-
+            
             Renderer renderer = GetComponent<Renderer>();
             if (renderer != null)
             {
                 bounds = renderer.bounds;
             }
-#if USING_PHYSICS2D_MODULE
             else
             {
                 Collider2D collider = GetComponent<Collider2D>();
                 if (collider != null)
-                    bounds = collider.bounds;
+                    if (collider.GetType() == typeof(PolygonCollider2D)) {
+                        m_ShapePath = Array.ConvertAll<Vector2, Vector3>(((PolygonCollider2D)collider).GetPath(0), vec2To3);
+                        m_UseRendererSilhouette = false;
+                    } else {
+                        bounds = collider.bounds;
+                    }
             }
-#endif
-            Vector3 inverseScale = Vector3.zero;
-            Vector3 relOffset = transform.position;
-
-            if (transform.lossyScale.x != 0 && transform.lossyScale.y != 0)
-            {
-                inverseScale = new Vector3(1 / transform.lossyScale.x, 1 / transform.lossyScale.y);
-                relOffset = new Vector3(inverseScale.x * -transform.position.x, inverseScale.y * -transform.position.y);
-            }
-
+    
+            Vector3 relOffset = bounds.center - transform.position;
+    
             if (m_ShapePath == null || m_ShapePath.Length == 0)
             {
                 m_ShapePath = new Vector3[]
                 {
-                    relOffset + new Vector3(inverseScale.x * bounds.min.x, inverseScale.y * bounds.min.y),
-                    relOffset + new Vector3(inverseScale.x * bounds.min.x, inverseScale.y * bounds.max.y),
-                    relOffset + new Vector3(inverseScale.x * bounds.max.x, inverseScale.y * bounds.max.y),
-                    relOffset + new Vector3(inverseScale.x * bounds.max.x, inverseScale.y * bounds.min.y),
+                    relOffset + new Vector3(-bounds.extents.x, -bounds.extents.y),
+                    relOffset + new Vector3(bounds.extents.x, -bounds.extents.y),
+                    relOffset + new Vector3(bounds.extents.x, bounds.extents.y),
+                    relOffset + new Vector3(-bounds.extents.x, bounds.extents.y)
                 };
+            }
+        }
+
+
+        public void Generate() {
+            CompositeCollider2D tilemapCollider = GetComponent<CompositeCollider2D>();
+            GameObject shadowCasterContainer = GameObject.Find("shadow_casters");
+            if(shadowCasterContainer == null) shadowCasterContainer = new GameObject("shadow_casters");
+            for (int i = 0; i < tilemapCollider.pathCount; i++) {
+                Vector2[] pathVertices = new Vector2[tilemapCollider.GetPathPointCount(i)];
+                tilemapCollider.GetPath(i, pathVertices);
+                GameObject shadowCaster = new GameObject("shadow_caster_" + i);
+                PolygonCollider2D shadowPolygon = (PolygonCollider2D)shadowCaster.AddComponent(typeof(PolygonCollider2D));
+                shadowCaster.transform.parent = shadowCasterContainer.transform;
+                shadowPolygon.points = pathVertices;
+                shadowPolygon.enabled = false;
+                ShadowCaster2D shadowCasterComponent = shadowCaster.AddComponent<ShadowCaster2D>();
+                shadowCasterComponent.selfShadows = true;
             }
         }
 
@@ -144,7 +142,7 @@ namespace UnityEngine.Rendering.Universal
             if (m_Mesh == null || m_InstanceId != GetInstanceID())
             {
                 m_Mesh = new Mesh();
-                m_ProjectedBoundingSphere = ShadowUtility.GenerateShadowMesh(m_Mesh, m_ShapePath);
+                ShadowUtility.GenerateShadowMesh(m_Mesh, m_ShapePath);
                 m_InstanceId = GetInstanceID();
             }
 
@@ -158,14 +156,12 @@ namespace UnityEngine.Rendering.Universal
 
         public void Update()
         {
-            Renderer renderer;
-            m_HasRenderer = TryGetComponent<Renderer>(out renderer);
+            Renderer renderer = GetComponent<Renderer>();
+            m_HasRenderer = renderer != null;
 
             bool rebuildMesh = LightUtility.CheckForChange(m_ShapePathHash, ref m_PreviousPathHash);
             if (rebuildMesh)
-            {
-                m_ProjectedBoundingSphere = ShadowUtility.GenerateShadowMesh(m_Mesh, m_ShapePath);
-            }
+                ShadowUtility.GenerateShadowMesh(m_Mesh, m_ShapePath);
 
             m_PreviousShadowCasterGroup = m_ShadowCasterGroup;
             bool addedToNewGroup = ShadowCasterGroup2DManager.AddToShadowCasterGroup(this, ref m_ShadowCasterGroup);
@@ -187,27 +183,17 @@ namespace UnityEngine.Rendering.Universal
 
             if (LightUtility.CheckForChange(m_CastsShadows, ref m_PreviousCastsShadows))
             {
-                if (m_CastsShadows)
+                if(m_CastsShadows)
                     ShadowCasterGroup2DManager.AddGroup(this);
                 else
                     ShadowCasterGroup2DManager.RemoveGroup(this);
             }
         }
 
-        public void OnBeforeSerialize()
-        {
-            m_ComponentVersion = k_CurrentComponentVersion;
+        private Vector3 vec2To3(Vector2 inputVector) {
+            return new Vector3(inputVector.x, inputVector.y, 0);
         }
 
-        public void OnAfterDeserialize()
-        {
-            // Upgrade from no serialized version
-            if (m_ComponentVersion == ComponentVersions.Version_Unserialized)
-            {
-                ShadowUtility.ComputeBoundingSphere(m_ShapePath, out m_ProjectedBoundingSphere);
-                m_ComponentVersion = ComponentVersions.Version_1;
-            }
-        }
 
 #if UNITY_EDITOR
         void Reset()
@@ -216,6 +202,20 @@ namespace UnityEngine.Rendering.Universal
             OnEnable();
         }
 
+        [CustomEditor(typeof(ShadowCaster2D))]
+        public class ShadowCaster2DEditor : Editor {
+
+            public override void OnInspectorGUI() {
+                DrawDefaultInspector();
+
+                if (GUILayout.Button("Generate")) {
+                    var generator = (ShadowCaster2D)target;
+
+                    generator.Generate();
+                }
+            }
+        }
 #endif
+
     }
 }
